@@ -1,0 +1,40 @@
+name: Live Notion suite
+
+# Runs the tests marked `live` against a throwaway Notion database, to catch
+# API drift. Does nothing until the NOTION_LIVE_TOKEN secret is set.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-notion
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    env:
+      NOTION_LIVE_TOKEN: ${{ secrets.NOTION_LIVE_TOKEN }}
+      NOTION_LIVE_DATA_SOURCE_ID: ${{ secrets.NOTION_LIVE_DATA_SOURCE_ID }}
+      NOTION_LIVE_USER_ID: ${{ secrets.NOTION_LIVE_USER_ID }}
+    steps:
+      - name: Report a missing token
+        if: env.NOTION_LIVE_TOKEN == ''
+        run: echo "::notice::NOTION_LIVE_TOKEN is not set; live suite skipped."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.NOTION_LIVE_TOKEN != ''
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        if: env.NOTION_LIVE_TOKEN != ''
+        with:
+          python-version: "3.13"
+      - run: uv sync --frozen
+        if: env.NOTION_LIVE_TOKEN != ''
+      - run: uv run pytest -m live
+        if: env.NOTION_LIVE_TOKEN != ''

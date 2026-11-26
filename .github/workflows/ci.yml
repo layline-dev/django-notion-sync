@@ -1,0 +1,140 @@
+name: CI
+
+# Runs on pull requests to main, against the PR merged into main. main
+# changes only through those merges, and the release workflow tests the tag
+# again before publishing. workflow_dispatch runs it on any branch by hand.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+
+  test-sqlite:
+    name: py${{ matrix.python }} / dj${{ matrix.django }} / sqlite
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+        django: ["5.2", "6.0", "6.1"]
+        exclude:
+          # Django 6.x needs Python 3.12 or newer.
+          - python: "3.11"
+            django: "6.0"
+          - python: "3.11"
+            django: "6.1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --frozen
+      - run: uv pip install "django~=${{ matrix.django }}.0"
+      - run: uv run --no-sync python -m django --version
+      - run: uv run --no-sync pytest -m "not live"
+      - name: Example project loads
+        run: uv run --no-sync python example/manage.py check
+
+  test-postgres:
+    name: py${{ matrix.python }} / dj${{ matrix.django }} / postgres
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest and newest supported Python for each Django series.
+        include:
+          - { python: "3.11", django: "5.2" }
+          - { python: "3.14", django: "5.2" }
+          - { python: "3.12", django: "6.0" }
+          - { python: "3.14", django: "6.0" }
+          - { python: "3.12", django: "6.1" }
+          - { python: "3.14", django: "6.1" }
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: notion_sync
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NOTION_SYNC_TEST_DB: postgres
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: notion_sync
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --frozen
+      - run: uv pip install "django~=${{ matrix.django }}.0"
+      - run: uv run --no-sync python -m django --version
+      - run: uv run --no-sync pytest -m "not live"
+
+  coverage:
+    # One fixed environment, so the floor in pyproject.toml means one thing.
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked
+      - run: uv run pytest -m "not live" --cov --cov-report=term
+
+  django-main:
+    # Early warning for the next Django release. Allowed to fail, and not a
+    # required check.
+    name: py3.14 / django main / sqlite
+    needs: lint
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.14"
+      - run: uv sync --frozen
+      - run: uv pip install "django @ https://github.com/django/django/archive/main.tar.gz"
+      - run: uv run --no-sync python -m django --version
+      - run: uv run --no-sync pytest -m "not live"

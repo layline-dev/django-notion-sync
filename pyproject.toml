@@ -1,0 +1,138 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "django-notion-sync"
+dynamic = ["version"]
+description = "Sync Django models with Notion databases: inline calls, a retrying outbox, and edits synced back through webhooks."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+keywords = ["django", "notion", "notion-api", "sync", "webhooks", "outbox"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "django>=5.2",
+    "notion-client>=3.1,<4",
+]
+
+[project.optional-dependencies]
+celery = ["celery>=5.4"]
+
+[project.urls]
+Homepage = "https://github.com/layline-dev/django-notion-sync"
+Source = "https://github.com/layline-dev/django-notion-sync"
+Changelog = "https://github.com/layline-dev/django-notion-sync/blob/main/CHANGELOG.md"
+Issues = "https://github.com/layline-dev/django-notion-sync/issues"
+
+[dependency-groups]
+# `uv sync` installs this group by default.
+dev = [
+    "celery>=5.4",
+    "celery-types>=0.26.0",
+    "django-stubs>=6.1.2",
+    "mypy>=2.4.1",
+    "pre-commit>=4.0",
+    "psycopg[binary]>=3.2",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "pytest-django>=4.9",
+    "respx>=0.22",
+    "ruff>=0.14",
+]
+
+[tool.hatch.version]
+path = "src/notion_sync/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/notion_sync"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "README.md", "CHANGELOG.md", "LICENSE"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["src", "."]
+extend-exclude = ["src/notion_sync/migrations", "tests/testapp/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "DJ", "S", "T20", "TID252", "PLC0415"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+"example/**" = ["S105"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config"
+markers = [
+    "live: calls the real Notion API; skipped unless NOTION_LIVE_TOKEN is set",
+]
+
+[tool.coverage.run]
+source = ["notion_sync"]
+branch = true
+omit = ["*/migrations/*"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = true
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/notion_sync"]
+mypy_path = "."
+plugins = ["mypy_django_plugin.main"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = "notion_sync.migrations.*"
+ignore_errors = true
+
+# The public modules (see "Public API" in the README) must be fully typed.
+[[tool.mypy.overrides]]
+module = [
+    "notion_sync",
+    "notion_sync.api",
+    "notion_sync.exceptions",
+    "notion_sync.files",
+    "notion_sync.mapping",
+    "notion_sync.models",
+    "notion_sync.pages",
+    "notion_sync.signals",
+    "notion_sync.tasks",
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.django-stubs]
+django_settings_module = "tests.settings"

@@ -1,0 +1,39 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:notion_sync_webhookevent_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  {% if tokens %}
+    {% if tokens|length > 1 %}
+      <ul class="messagelist">
+        <li class="warning">{{ tokens|length }} tokens arrived in the last {{ minutes }} minutes. The handshake request is not signed, so anyone who knows the URL can post one. Only the token Notion accepts in its Verify dialog is real; use that one.</li>
+      </ul>
+    {% endif %}
+    <table>
+      <thead><tr><th>Token</th><th>Received</th></tr></thead>
+      <tbody>
+        {% for token, received in tokens %}
+          <tr><td><code>{{ token }}</code></td><td>{{ received|date:"H:i:s e" }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <h2>Next steps</h2>
+    <ol>
+      <li>Paste the token into the subscription's <strong>Verify</strong> dialog in Notion.</li>
+      <li>Set it as the target's <code>WEBHOOK_VERIFICATION_TOKEN</code>, from the environment, and redeploy. The package does not store it anywhere else.</li>
+    </ol>
+    <p>Until the setting is live, events are answered with 401. Notion retries a failed delivery for about a day, so they arrive once you have redeployed.</p>
+  {% else %}
+    <p>No verification token arrived in the last {{ minutes }} minutes.</p>
+    <p>In Notion, open the integration's <strong>Webhooks</strong> tab and click <strong>Resend token</strong>, then reload this page. Tokens are kept in Django's cache, so the cache must be shared by every web process (a local-memory cache is not).</p>
+  {% endif %}
+</div>
+{% endblock %}

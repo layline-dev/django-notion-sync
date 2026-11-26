@@ -1,0 +1,8 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+  {% if show_verification_token_link %}
+    <li><a href="{% url 'admin:notion_sync_webhookevent_verification_token' %}">Webhook verification token</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
